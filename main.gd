@@ -1,29 +1,128 @@
 extends Node
 
 var clicked = false
-var width = 7
-var height = 7
+var max_chip_value = 7
+var width = max_chip_value
+var height = max_chip_value
 var board = []
 var moves = 0
 var animating = false
 @export var moves_per_round = 7
 
 var rng = RandomNumberGenerator.new()
-var current_value = rng.randi_range(1, 7)
+var current_value = rng.randi_range(1, max_chip_value)
 
 var chip = preload("res://chip.tscn")
 var chip_texture = [preload("res://art/chip1.png"), preload("res://art/chip2.png"), preload("res://art/chip3.png"), preload("res://art/chip4.png"), preload("res://art/chip5.png"), preload("res://art/chip6.png"), preload("res://art/chip7.png")]
 
-var lane_width 
+var lane_width
+var mode = 'blitz'
 
-# Called when the node enters the scene tree for the first time.
-func _ready():	
+func spawn_chip(val, col, height):
+	var tile = chip.instantiate()
+	tile.get_node("Sprite2D").texture = chip_texture[val]
+	tile.get_node("Sprite2D").scale = Vector2(lane_width / 48, lane_width / 48)
+	tile.get_node("CollisionShape2D").shape.extents = Vector2(lane_width / 2, lane_width / 2)
+	tile.position = Vector2(lane_width * col + lane_width/2, -1 * height)
+	add_child(tile)
+	return tile
+
+func _ready():
+	start_game()
+	
+func pause(seconds):
+	await get_tree().create_timer(seconds).timeout
+	
+func start_game():	
 	lane_width = get_viewport().get_visible_rect().size.x/width
 	for x in width:
 		board.append([])
 		for y in height:
 			board[x].append({"val": 0, "chip": null, "to_delete": false})
-			
+	if mode == 'blitz':
+		# var number_of_starting_chips = rng.randi_range(max_chip_value, max_chip_value * 2)
+		var number_of_starting_chips = 28
+		var row = height - 1
+		while row > 0 && number_of_starting_chips > 0:
+			for col in width:
+				board[col][row].val = rng.randi_range(1, max_chip_value)
+				number_of_starting_chips -= 1
+			row -= 1
+
+		var clear_count = 0
+		clear_count = scan_and_clear()
+		while clear_count > 0:
+			for i in width:
+				for j in height:
+					if board[i][j].to_delete:
+						board[i][j].val = 0
+						board[i][j].to_delete = false
+			coalesce_board()			
+			clear_count = scan_and_clear()
+
+		row = height - 1
+		for i in width:
+			print(board[i])
+		while row >= 0:
+			for col in width:
+				if board[col][row].val != 0:
+					board[col][row].chip = spawn_chip(board[col][row].val - 1, col, -1 * row)
+			row -= 1
+		"""
+		var total_amount = rng.randi_range(max_chip_value,max_chip_value * 2)
+		var row = height - 1
+		var col = 0
+		# lay down the first row
+		while col < width:
+			var run_length = rng.randi_range(0, width - col)
+			if run_length > 0:
+				var i = 0
+				while i < run_length:
+					var val = rng.randi_range(1, max_chip_value)
+					while val == run_length:
+						val = rng.randi_range(1, max_chip_value)
+					board[col + i][row].val = val
+					board[col + i][row].chip = spawn_chip(val - 1, col + i, height - row)
+					board[col + i][row].to_delete = false
+					await get_tree().create_timer(0.05).timeout
+					total_amount -= 1
+					i += 1
+				col += run_length + 1
+			else:
+				col += 1
+		# subsequent rows
+		while total_amount > 0:
+			# lay down the next row
+			col = 0
+			row -= 1
+			while col < width:
+				# check the chip below, make sure we dont
+				# spawn an immediately deletable chip
+				# 
+				# only do sometihng if there is something below
+				# get the run length from the previous row...
+				if board[col][row + 1].val != 0:
+					var run_length = 0
+					var i = col
+					while i < width && board[i][row + 1].val != 0 && board[i][row + 1].val != height - row:
+						run_length += 1
+						i += 1
+					if run_length > 0:						
+						for j in run_length:
+							var val = rng.randi_range(1, max_chip_value)
+							while (val == run_length) || (val == (height - row)):
+								val = rng.randi_range(1, max_chip_value)
+							board[col][row].val = val
+							board[col][row].chip = spawn_chip(val - 1, col, row)
+							board[col][row].to_delete = false
+							total_amount -= 1
+							col += 1
+					else:
+						col += 1					
+				else:
+					col += 1
+		"""
+
 func coaelesce_column(col):
 	var coalesce_count = 0
 	var row = height - 1
@@ -48,9 +147,8 @@ func coaelesce_column(col):
 	return coalesce_count
 	
 func coalesce_board():
-	for col in width:
-		var coalesce_count = 0
-		coalesce_count = coaelesce_column(col)
+	for col in width:	
+		var coalesce_count = coaelesce_column(col)
 		while coalesce_count > 0:
 			coalesce_count = coaelesce_column(col)
 		
@@ -92,7 +190,8 @@ func clear_row():
 				for i in run_length:
 					if board[start_column + i][row].val == run_length && !board[start_column + i][row].to_delete:
 						board[start_column + i][row].to_delete = true
-						board[start_column + i][row].chip.freeze = true
+						if board[start_column + i][row].chip:
+							board[start_column + i][row].chip.freeze = true
 						clear_count += 1
 	return clear_count
 
@@ -120,19 +219,18 @@ func clear_column(_col):
 	
 func scan_and_clear():
 	var clear_count = 0
-	
+
 	# clear the columns
 	for _col in width:
 		clear_count += clear_column(_col)
 		
 	# clear the rows
 	var row_clear = 0
-	row_clear = await clear_row()
+	row_clear = clear_row()
 	clear_count += row_clear
 	while row_clear > 0:
-		row_clear = await clear_row()
+		row_clear = clear_row()
 		clear_count += row_clear
-
 	return clear_count
 
 func delete_tiles():
@@ -168,12 +266,12 @@ func do_drop(_col):
 					row += 1
 			board[col][row] = {"val": current_value, "chip": tile, "to_delete": false}
 		await get_tree().create_timer(0.5).timeout
-		var clear_count = await scan_and_clear()
+		var clear_count = scan_and_clear()
 		while clear_count > 0:
 			var deleted_count = await delete_tiles()
-			await coalesce_board()
+			coalesce_board()
 			await get_tree().create_timer(0.5).timeout
-			clear_count = await scan_and_clear()
+			clear_count = scan_and_clear()
 		animating = false
 		current_value = rng.randi_range(1, 7)
 	
