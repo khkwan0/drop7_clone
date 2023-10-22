@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3 uid="uid://bstpqh1t1epct"]
+
+[ext_resource type="PackedScene" uid="uid://bo4fo3apa3neq" path="res://stationary.tscn" id="1_qm5jf"]
+[ext_resource type="Script" path="res://board.gd" id="1_tap1e"]
+[ext_resource type="PackedScene" uid="uid://dc1e42ds7xliw" path="res://chip.tscn" id="2_7gbdf"]
+
+[node name="Board" type="CanvasLayer"]
+script = ExtResource("1_tap1e")
+
+[node name="Stationary" parent="." instance=ExtResource("1_qm5jf")]
+position = Vector2(500, 600)
+freeze = true
+
+[node name="Chip" parent="." instance=ExtResource("2_7gbdf")]
+position = Vector2(500, 0)

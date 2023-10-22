@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://bbo81r1lkanck"]
+
+[ext_resource type="Script" path="res://Lane.gd" id="1_om045"]
+
+[node name="Lane" type="Node2D"]
+script = ExtResource("1_om045")
+
+[node name="CanvasModulate" type="CanvasModulate" parent="."]

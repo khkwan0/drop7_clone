@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3 uid="uid://dc1e42ds7xliw"]
+
+[ext_resource type="Texture2D" uid="uid://bsq73jfc6jdjc" path="res://art/chip.png" id="1_8itjn"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_6s1wy"]
+size = Vector2(48, 48)
+
+[node name="Chip" type="RigidBody2D"]
+gravity_scale = 10.0
+can_sleep = false
+lock_rotation = true
+linear_velocity = Vector2(0, 22)
+metadata/_edit_group_ = true
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("1_8itjn")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_6s1wy")
