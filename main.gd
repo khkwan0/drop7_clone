@@ -13,7 +13,15 @@ var rng = RandomNumberGenerator.new()
 var current_value = rng.randi_range(1, max_chip_value)
 
 var chip = preload("res://chip.tscn")
-var chip_texture = [preload("res://art/chip1.png"), preload("res://art/chip2.png"), preload("res://art/chip3.png"), preload("res://art/chip4.png"), preload("res://art/chip5.png"), preload("res://art/chip6.png"), preload("res://art/chip7.png")]
+var chip_texture = [
+	preload("res://art/chip1.png"),
+	preload("res://art/chip2.png"), 
+	preload("res://art/chip3.png"), 
+	preload("res://art/chip4.png"), 
+	preload("res://art/chip5.png"), 
+	preload("res://art/chip6.png"), 
+	preload("res://art/chip7.png")
+]
 
 var lane_width
 var mode = 'blitz'
@@ -21,8 +29,8 @@ var mode = 'blitz'
 func spawn_chip(val, col, height):
 	var tile = chip.instantiate()
 	tile.get_node("Sprite2D").texture = chip_texture[val]
-	tile.get_node("Sprite2D").scale = Vector2(lane_width / 48, lane_width / 48)
-	tile.get_node("CollisionShape2D").shape.extents = Vector2(lane_width / 2, lane_width / 2)
+	tile._set_scale(Vector2(lane_width / 48, lane_width / 48))
+	tile._set_collision(Vector2(lane_width / 2, lane_width / 2))
 	tile.position = Vector2(lane_width * col + lane_width/2, -1 * height)
 	add_child(tile)
 	return tile
@@ -61,67 +69,11 @@ func start_game():
 			clear_count = scan_and_clear()
 
 		row = height - 1
-		for i in width:
-			print(board[i])
 		while row >= 0:
 			for col in width:
 				if board[col][row].val != 0:
 					board[col][row].chip = spawn_chip(board[col][row].val - 1, col, -1 * row)
 			row -= 1
-		"""
-		var total_amount = rng.randi_range(max_chip_value,max_chip_value * 2)
-		var row = height - 1
-		var col = 0
-		# lay down the first row
-		while col < width:
-			var run_length = rng.randi_range(0, width - col)
-			if run_length > 0:
-				var i = 0
-				while i < run_length:
-					var val = rng.randi_range(1, max_chip_value)
-					while val == run_length:
-						val = rng.randi_range(1, max_chip_value)
-					board[col + i][row].val = val
-					board[col + i][row].chip = spawn_chip(val - 1, col + i, height - row)
-					board[col + i][row].to_delete = false
-					await get_tree().create_timer(0.05).timeout
-					total_amount -= 1
-					i += 1
-				col += run_length + 1
-			else:
-				col += 1
-		# subsequent rows
-		while total_amount > 0:
-			# lay down the next row
-			col = 0
-			row -= 1
-			while col < width:
-				# check the chip below, make sure we dont
-				# spawn an immediately deletable chip
-				# 
-				# only do sometihng if there is something below
-				# get the run length from the previous row...
-				if board[col][row + 1].val != 0:
-					var run_length = 0
-					var i = col
-					while i < width && board[i][row + 1].val != 0 && board[i][row + 1].val != height - row:
-						run_length += 1
-						i += 1
-					if run_length > 0:						
-						for j in run_length:
-							var val = rng.randi_range(1, max_chip_value)
-							while (val == run_length) || (val == (height - row)):
-								val = rng.randi_range(1, max_chip_value)
-							board[col][row].val = val
-							board[col][row].chip = spawn_chip(val - 1, col, row)
-							board[col][row].to_delete = false
-							total_amount -= 1
-							col += 1
-					else:
-						col += 1					
-				else:
-					col += 1
-		"""
 
 func coaelesce_column(col):
 	var coalesce_count = 0
@@ -238,6 +190,7 @@ func delete_tiles():
 	for col in width:
 		for row in height:
 			if board[col][row].to_delete:
+				await board[col][row].chip.explode()
 				board[col][row].val = 0
 				board[col][row].chip.queue_free()
 				board[col][row].to_delete = false

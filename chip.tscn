@@ -1,5 +1,6 @@
-[gd_scene load_steps=3 format=3 uid="uid://dc1e42ds7xliw"]
+[gd_scene load_steps=4 format=3 uid="uid://dc1e42ds7xliw"]
 
+[ext_resource type="Script" path="res://chip.gd" id="1_2rsxm"]
 [ext_resource type="Texture2D" uid="uid://bsq73jfc6jdjc" path="res://art/chip.png" id="1_8itjn"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_6s1wy"]
@@ -10,6 +11,7 @@ gravity_scale = 10.0
 can_sleep = false
 lock_rotation = true
 linear_velocity = Vector2(0, 22)
+script = ExtResource("1_2rsxm")
 metadata/_edit_group_ = true
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
