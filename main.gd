@@ -3,12 +3,13 @@ extends Node
 var clicked = false
 var max_chip_value = 7
 var max_columns = max_chip_value
-var height = max_chip_value
+var max_rows = max_chip_value + 1
 var board = []
 @export var moves = 0
 var animating = false
 @export var moves_per_round = 5
 @export_range(0, 1) var padding_percentage = 0.1
+@export var game_state = 'stopped'
 
 var rng = RandomNumberGenerator.new()
 var current_value = rng.randi_range(1, max_chip_value)
@@ -45,21 +46,31 @@ func spawn_chip(val, col, height):
 	return tile
 
 func _ready():
-	start_game()
+	pass
 	
 func pause(seconds):
 	await get_tree().create_timer(seconds).timeout
 	
-func start_game():	
+func clear_board():
+	for col in board.size():
+		for row in board[col].size():
+			board[col][row].val = 0
+			board[col][row].toDelete = false
+			if board[col][row].chip != null:
+				board[col][row].chip.queue_free()
+				
+func start_game():
+	clear_board()
+	game_state = 'running'
 	lane_width = get_viewport().get_visible_rect().size.x * (1 - padding_percentage) / max_columns
 	for x in max_columns:
 		board.append([])
-		for y in height:
+		for y in max_rows:
 			board[x].append({"val": 0, "chip": null, "to_delete": false})
 	if mode == 'blitz':
 		# var number_of_starting_chips = rng.randi_range(max_chip_value, max_chip_value * 2)
 		var number_of_starting_chips = 28
-		var row = height - 1
+		var row = max_rows - 1
 		while row > 0 && number_of_starting_chips > 0:
 			for col in max_columns:
 				board[col][row].val = rng.randi_range(1, max_chip_value)
@@ -70,14 +81,14 @@ func start_game():
 		clear_count = scan_and_clear()
 		while clear_count > 0:
 			for i in max_columns:
-				for j in height:
+				for j in max_rows:
 					if board[i][j].to_delete:
 						board[i][j].val = 0
 						board[i][j].to_delete = false
 			coalesce_board()			
 			clear_count = scan_and_clear()
 		for col in max_columns:
-			row = height - 1
+			row = max_rows - 1
 			while row >= 0:			
 				if board[col][row].val != 0:
 					board[col][row].chip = spawn_chip(board[col][row].val - 1, col, -1 * row)
@@ -86,7 +97,7 @@ func start_game():
 
 func coaelesce_column(col):
 	var coalesce_count = 0
-	var row = height - 1
+	var row = max_rows - 1
 	while row > 0:
 		if board[col][row].val == 0:
 			# start looking one above
@@ -131,7 +142,7 @@ func check_break_armor(col, row):
 		break_armor(left, row)
 	if right < max_columns - 1:
 		break_armor(right, row)
-	if below < height - 1:
+	if below < max_rows - 1:
 		break_armor(col, below)
 	if above >= 0:
 		break_armor(col, above)	
@@ -139,7 +150,7 @@ func check_break_armor(col, row):
 func clear_row():
 	var clear_count = 0
 
-	for row in height:
+	for row in max_rows:
 		var col = 0
 		while col < max_columns:
 			if board[col][row].val == 0:
@@ -161,7 +172,7 @@ func clear_column(_col):
 	var clear_count = 0
 	
 	# get column height
-	var row = height - 1
+	var row = max_rows - 1
 	var found = false
 	while row >= 0 && !found:
 		if board[_col][row].val == 0:
@@ -172,7 +183,7 @@ func clear_column(_col):
 	
 	# now check which ones to delete
 	if col_height > 0:
-		for _row in height:
+		for _row in max_rows:
 			if board[_col][_row].val == col_height:
 				board[_col][_row].to_delete = true
 				clear_count += 1
@@ -197,7 +208,7 @@ func scan_and_clear():
 func delete_tiles():
 	var deleted_count = 0
 	for col in max_columns:
-		for row in height:
+		for row in max_rows:
 			if board[col][row].to_delete:
 				await board[col][row].chip.explode()
 				board[col][row].val = 0
@@ -212,7 +223,7 @@ func add_row():
 	var col = 0
 	while col < max_columns:
 		var row = 0
-		while row < height - 1:
+		while row < max_rows - 1:
 			if board[col][row + 1].val != 0:
 				board[col][row].val = board[col][row + 1].val
 				board[col][row].chip = board[col][row + 1].chip
@@ -232,6 +243,29 @@ func add_row():
 		board[col][6] = {"val": -2, "chip": tile, "to_delete": false}
 		col += 1
 			
+func check_for_game_over():
+	var col = 0
+	var found = false
+	while col < max_columns && !found:
+		if board[col][0].val != 0:
+			found = true
+		else:
+			col += 1
+	if found:
+		print("found a")
+		return true
+	
+	found = false
+	col = 0
+	while col < max_columns && !found:
+		if board[col][1].val == 0:
+			found = true
+		else:
+			col += 1
+	if found:
+		return false
+	else:
+		return true
 	
 func do_drop(_col):
 	if !animating:
@@ -241,8 +275,8 @@ func do_drop(_col):
 		if board[col][row].val == 0:
 			moves += 1
 			var found = false
-			while row < height && !found:
-				if row == height - 1 || board[col][row + 1].val != 0:
+			while row < max_rows && !found:
+				if row == max_rows - 1 || board[col][row + 1].val != 0:
 					found = true
 				else:
 					row += 1
@@ -256,26 +290,34 @@ func do_drop(_col):
 			clear_count = scan_and_clear()
 		if moves % moves_per_round == 0:
 			add_row()
+		if check_for_game_over():
+			print("game over")
+			game_state = 'stopped'
 		animating = false
 		current_value = rng.randi_range(1, 7)
 	
 func _process(delta):
-	if Input.is_action_just_pressed("click"):
-		clicked = true
-	if Input.is_action_just_released("click"):
-		clicked = false
-	if Input.is_action_just_pressed("key1"):
-		do_drop(1)
-	if Input.is_action_just_released("key2"):
-		do_drop(2)
-	if Input.is_action_just_released("key3"):
-		do_drop(3)
-	if Input.is_action_just_released("key4"):
-		do_drop(4)
-	if Input.is_action_just_released("key5"):
-		do_drop(5)
-	if Input.is_action_just_released("key6"):
-		do_drop(6)
-	if Input.is_action_just_released("key7"):
-		do_drop(7)
+	if game_state == 'stopped':
+		if Input.is_action_just_pressed("keyS"):
+			start_game()
+	else:
+		if game_state == 'running':
+			if Input.is_action_just_pressed("click"):
+				clicked = true
+			if Input.is_action_just_released("click"):
+				clicked = false
+			if Input.is_action_just_pressed("key1"):
+				do_drop(1)
+			if Input.is_action_just_released("key2"):
+				do_drop(2)
+			if Input.is_action_just_released("key3"):
+				do_drop(3)
+			if Input.is_action_just_released("key4"):
+				do_drop(4)
+			if Input.is_action_just_released("key5"):
+				do_drop(5)
+			if Input.is_action_just_released("key6"):
+				do_drop(6)
+			if Input.is_action_just_released("key7"):
+				do_drop(7)
 	
