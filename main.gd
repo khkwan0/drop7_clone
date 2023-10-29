@@ -2,17 +2,18 @@ extends Node
 
 var clicked = false
 var max_chip_value = 7
-var width = max_chip_value
+var max_columns = max_chip_value
 var height = max_chip_value
 var board = []
-var moves = 0
+@export var moves = 0
 var animating = false
-@export var moves_per_round = 7
+@export var moves_per_round = 5
+@export_range(0, 1) var padding_percentage = 0.1
 
 var rng = RandomNumberGenerator.new()
 var current_value = rng.randi_range(1, max_chip_value)
 
-var chip = preload("res://chip.tscn")
+var chip_template = preload("res://chip.tscn")
 var chip_texture = [
 	preload("res://art/chip1.png"),
 	preload("res://art/chip2.png"), 
@@ -23,16 +24,24 @@ var chip_texture = [
 	preload("res://art/chip7.png")
 ]
 
+var new_chip_texture = preload("res://art/chip.png")
+var cracked_chip_texture = preload("res://art/chip.png")
+
 var lane_width
 var mode = 'blitz'
 
 func spawn_chip(val, col, height):
-	var tile = chip.instantiate()
+	var tile = chip_template.instantiate()
 	tile.get_node("Sprite2D").texture = chip_texture[val]
-	tile._set_scale(Vector2(lane_width / 48, lane_width / 48))
-	tile._set_collision(Vector2(lane_width / 2, lane_width / 2))
-	tile.position = Vector2(lane_width * col + lane_width/2, -1 * height)
+	tile._set_scale(lane_width)
+	# tile._set_collision(Vector2(lane_width / 2, lane_width / 2))
+	var row = height
+	if row < 0:
+		row = row * -1
+	tile.set_initial_position(col, row, lane_width, get_viewport().get_visible_rect().size.x * padding_percentage / 2)
+	# tile.position = Vector2(lane_width * col + lane_width/2, -1 * height * 48 + 240)
 	add_child(tile)
+	tile.drop(row)
 	return tile
 
 func _ready():
@@ -42,8 +51,8 @@ func pause(seconds):
 	await get_tree().create_timer(seconds).timeout
 	
 func start_game():	
-	lane_width = get_viewport().get_visible_rect().size.x/width
-	for x in width:
+	lane_width = get_viewport().get_visible_rect().size.x * (1 - padding_percentage) / max_columns
+	for x in max_columns:
 		board.append([])
 		for y in height:
 			board[x].append({"val": 0, "chip": null, "to_delete": false})
@@ -52,7 +61,7 @@ func start_game():
 		var number_of_starting_chips = 28
 		var row = height - 1
 		while row > 0 && number_of_starting_chips > 0:
-			for col in width:
+			for col in max_columns:
 				board[col][row].val = rng.randi_range(1, max_chip_value)
 				number_of_starting_chips -= 1
 			row -= 1
@@ -60,20 +69,20 @@ func start_game():
 		var clear_count = 0
 		clear_count = scan_and_clear()
 		while clear_count > 0:
-			for i in width:
+			for i in max_columns:
 				for j in height:
 					if board[i][j].to_delete:
 						board[i][j].val = 0
 						board[i][j].to_delete = false
 			coalesce_board()			
 			clear_count = scan_and_clear()
-
-		row = height - 1
-		while row >= 0:
-			for col in width:
+		for col in max_columns:
+			row = height - 1
+			while row >= 0:			
 				if board[col][row].val != 0:
 					board[col][row].chip = spawn_chip(board[col][row].val - 1, col, -1 * row)
-			row -= 1
+					await pause(.01)
+				row -= 1
 
 func coaelesce_column(col):
 	var coalesce_count = 0
@@ -84,11 +93,13 @@ func coaelesce_column(col):
 			var _row = row - 1
 			var found = false
 			while _row > 0 && !found:
-				#  we found a tile
+				#  we found a tile				
 				if board[col][_row].val != 0:
-					found = true
+					found = true					
 					board[col][row].val = board[col][_row].val
 					board[col][row].chip = board[col][_row].chip
+					if board[col][row].chip != null:
+						board[col][row].chip.drop(row)
 					board[col][row].to_delete = false
 					board[col][_row].val = 0
 					board[col][_row].to_delete = false					
@@ -99,7 +110,7 @@ func coaelesce_column(col):
 	return coalesce_count
 	
 func coalesce_board():
-	for col in width:	
+	for col in max_columns:
 		var coalesce_count = coaelesce_column(col)
 		while coalesce_count > 0:
 			coalesce_count = coaelesce_column(col)
@@ -118,7 +129,7 @@ func check_break_armor(col, row):
 	
 	if left >= 0:
 		break_armor(left, row)
-	if right < width - 1:
+	if right < max_columns - 1:
 		break_armor(right, row)
 	if below < height - 1:
 		break_armor(col, below)
@@ -130,20 +141,18 @@ func clear_row():
 
 	for row in height:
 		var col = 0
-		while col < width:
+		while col < max_columns:
 			if board[col][row].val == 0:
 				col += 1
 			else:
 				var run_length = 0
 				var start_column = col
-				while col < width && board[col][row].val != 0:
+				while col < max_columns && board[col][row].val != 0:
 					run_length += 1
 					col += 1
 				for i in run_length:
 					if board[start_column + i][row].val == run_length && !board[start_column + i][row].to_delete:
 						board[start_column + i][row].to_delete = true
-						if board[start_column + i][row].chip:
-							board[start_column + i][row].chip.freeze = true
 						clear_count += 1
 	return clear_count
 
@@ -173,7 +182,7 @@ func scan_and_clear():
 	var clear_count = 0
 
 	# clear the columns
-	for _col in width:
+	for _col in max_columns:
 		clear_count += clear_column(_col)
 		
 	# clear the rows
@@ -187,7 +196,7 @@ func scan_and_clear():
 
 func delete_tiles():
 	var deleted_count = 0
-	for col in width:
+	for col in max_columns:
 		for row in height:
 			if board[col][row].to_delete:
 				await board[col][row].chip.explode()
@@ -195,8 +204,34 @@ func delete_tiles():
 				board[col][row].chip.queue_free()
 				board[col][row].to_delete = false
 				deleted_count += 1
-				await get_tree().create_timer(0.1).timeout
+				await get_tree().create_timer(0.01).timeout
 	return deleted_count
+	
+func add_row():
+	#  move everything up 1
+	var col = 0
+	while col < max_columns:
+		var row = 0
+		while row < height - 1:
+			if board[col][row + 1].val != 0:
+				board[col][row].val = board[col][row + 1].val
+				board[col][row].chip = board[col][row + 1].chip
+				if board[col][row + 1].chip != null:
+					board[col][row + 1].chip.move_up(row)
+			row += 1
+		col += 1
+		
+	# spawn a new row
+	col = 0
+	while col < max_columns:		
+		var tile = chip_template.instantiate()
+		tile.get_node("Sprite2D").texture = new_chip_texture
+		tile._set_scale(lane_width)
+		tile.set_new_chip_position(col, 6, lane_width, get_viewport().get_visible_rect().size.x * padding_percentage / 2)
+		add_child(tile)
+		board[col][6] = {"val": -2, "chip": tile, "to_delete": false}
+		col += 1
+			
 	
 func do_drop(_col):
 	if !animating:
@@ -205,26 +240,22 @@ func do_drop(_col):
 		var col = _col - 1
 		if board[col][row].val == 0:
 			moves += 1
-			var tile = chip.instantiate()
-			tile.get_node("Sprite2D").texture = chip_texture[current_value - 1]
-			tile.get_node("Sprite2D").scale = Vector2(lane_width / 48, lane_width / 48)
-			tile.get_node("CollisionShape2D").shape.extents = Vector2(lane_width / 2, lane_width / 2)
-			tile.position = Vector2(lane_width * col + lane_width/2, 0)
-			add_child(tile)
 			var found = false
 			while row < height && !found:
 				if row == height - 1 || board[col][row + 1].val != 0:
 					found = true
 				else:
 					row += 1
-			board[col][row] = {"val": current_value, "chip": tile, "to_delete": false}
+			board[col][row] = {"val": current_value, "chip": spawn_chip(current_value - 1, col, row), "to_delete": false}
 		await get_tree().create_timer(0.5).timeout
 		var clear_count = scan_and_clear()
 		while clear_count > 0:
 			var deleted_count = await delete_tiles()
 			coalesce_board()
-			await get_tree().create_timer(0.5).timeout
+			await get_tree().create_timer(1).timeout
 			clear_count = scan_and_clear()
+		if moves % moves_per_round == 0:
+			add_row()
 		animating = false
 		current_value = rng.randi_range(1, 7)
 	

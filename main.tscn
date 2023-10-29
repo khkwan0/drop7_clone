@@ -1,17 +1,6 @@
-[gd_scene load_steps=3 format=3 uid="uid://joiq2o0auc8k"]
+[gd_scene load_steps=2 format=3 uid="uid://joiq2o0auc8k"]
 
 [ext_resource type="Script" path="res://main.gd" id="1_tkk6s"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_kjudc"]
-size = Vector2(480, 100)
-
 [node name="Main" type="Node"]
 script = ExtResource("1_tkk6s")
-
-[node name="RigidBody2D" type="RigidBody2D" parent="."]
-gravity_scale = 0.0
-freeze = true
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="RigidBody2D"]
-position = Vector2(240, 670)
-shape = SubResource("RectangleShape2D_kjudc")
