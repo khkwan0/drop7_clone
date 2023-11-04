@@ -4,6 +4,7 @@ var clicked = false
 var max_chip_value = 7
 var max_columns = max_chip_value
 var max_rows = max_chip_value + 1
+@export var starting_hit_points = 2
 var board = []
 @export var moves = 0
 var animating = false
@@ -26,7 +27,7 @@ var chip_texture = [
 ]
 
 var new_chip_texture = preload("res://art/chip.png")
-var cracked_chip_texture = preload("res://art/chip.png")
+var cracked_chip_texture = preload("res://art/chip_broken.png")
 
 var lane_width
 var mode = 'blitz'
@@ -46,7 +47,7 @@ func spawn_chip(val, col, height):
 	return tile
 
 func _ready():
-	pass
+	start_game()
 	
 func pause(seconds):
 	await get_tree().create_timer(seconds).timeout
@@ -61,6 +62,7 @@ func clear_board():
 				
 func start_game():
 	clear_board()
+	print(max_rows)
 	game_state = 'running'
 	lane_width = get_viewport().get_visible_rect().size.x * (1 - padding_percentage) / max_columns
 	for x in max_columns:
@@ -68,7 +70,7 @@ func start_game():
 		for y in max_rows:
 			board[x].append({"val": 0, "chip": null, "to_delete": false})
 	if mode == 'blitz':
-		# var number_of_starting_chips = rng.randi_range(max_chip_value, max_chip_value * 2)
+		# spawn a bunch of chips
 		var number_of_starting_chips = 28
 		var row = max_rows - 1
 		while row > 0 && number_of_starting_chips > 0:
@@ -76,7 +78,7 @@ func start_game():
 				board[col][row].val = rng.randi_range(1, max_chip_value)
 				number_of_starting_chips -= 1
 			row -= 1
-
+		# do an initial scan_and_clear and coalesce off screen
 		var clear_count = 0
 		clear_count = scan_and_clear()
 		while clear_count > 0:
@@ -87,6 +89,7 @@ func start_game():
 						board[i][j].to_delete = false
 			coalesce_board()			
 			clear_count = scan_and_clear()
+		# render and drop what is left
 		for col in max_columns:
 			row = max_rows - 1
 			while row >= 0:			
@@ -129,8 +132,13 @@ func coalesce_board():
 func break_armor(col, row):
 	if board[col][row].val < -1:
 		board[col][row].val += 1
-		if board[col][row].val == -1:
-			board[col][row].val = rng.randi_range(1, 7)
+		if board[col][row].val == -2:
+			board[col][row].chip.get_node("Sprite2D").texture = cracked_chip_texture
+		else:
+			if board[col][row].val == -1:
+				board[col][row].val = rng.randi_range(1, max_chip_value)
+				board[col][row].chip.get_node("Sprite2D").texture = chip_texture[board[col][row].val - 1]
+			
 		
 func check_break_armor(col, row):
 	var left = col - 1
@@ -216,14 +224,17 @@ func delete_tiles():
 				board[col][row].to_delete = false
 				deleted_count += 1
 				await get_tree().create_timer(0.01).timeout
+				check_break_armor(col, row)
 	return deleted_count
 	
 func add_row():
 	#  move everything up 1
 	var col = 0
 	while col < max_columns:
+		# start from top row
 		var row = 0
 		while row < max_rows - 1:
+			# if a chip below, then move it up
 			if board[col][row + 1].val != 0:
 				board[col][row].val = board[col][row + 1].val
 				board[col][row].chip = board[col][row + 1].chip
@@ -238,9 +249,9 @@ func add_row():
 		var tile = chip_template.instantiate()
 		tile.get_node("Sprite2D").texture = new_chip_texture
 		tile._set_scale(lane_width)
-		tile.set_new_chip_position(col, 6, lane_width, get_viewport().get_visible_rect().size.x * padding_percentage / 2)
+		tile.set_new_chip_position(col, max_rows - 1, lane_width, get_viewport().get_visible_rect().size.x * padding_percentage / 2)
 		add_child(tile)
-		board[col][6] = {"val": -2, "chip": tile, "to_delete": false}
+		board[col][max_rows - 1] = {"val": -1 * starting_hit_points - 1, "chip": tile, "to_delete": false}
 		col += 1
 			
 func check_for_game_over():
@@ -266,11 +277,19 @@ func check_for_game_over():
 		return false
 	else:
 		return true
-	
+
+func do_post_drop():
+	var clear_count = scan_and_clear()
+	while clear_count > 0:
+		var deleted_count = await delete_tiles()
+		coalesce_board()
+		await get_tree().create_timer(1).timeout
+		clear_count = scan_and_clear()
+		
 func do_drop(_col):
 	if !animating:
 		animating = true
-		var row = 0
+		var row = 1
 		var col = _col - 1
 		if board[col][row].val == 0:
 			moves += 1
@@ -281,20 +300,19 @@ func do_drop(_col):
 				else:
 					row += 1
 			board[col][row] = {"val": current_value, "chip": spawn_chip(current_value - 1, col, row), "to_delete": false}
-		await get_tree().create_timer(0.5).timeout
-		var clear_count = scan_and_clear()
-		while clear_count > 0:
-			var deleted_count = await delete_tiles()
-			coalesce_board()
-			await get_tree().create_timer(1).timeout
-			clear_count = scan_and_clear()
-		if moves % moves_per_round == 0:
+			await get_tree().create_timer(0.5).timeout
+			do_post_drop()
+			await get_tree().create_timer(0.5).timeout
+			#if moves % moves_per_round == 0:
 			add_row()
-		if check_for_game_over():
-			print("game over")
-			game_state = 'stopped'
-		animating = false
-		current_value = rng.randi_range(1, 7)
+			await get_tree().create_timer(0.5).timeout
+			if check_for_game_over():
+				print("game over")
+				game_state = 'stopped'
+			else:
+				do_post_drop()
+				animating = false
+				current_value = rng.randi_range(1, 7)
 	
 func _process(delta):
 	if game_state == 'stopped':
