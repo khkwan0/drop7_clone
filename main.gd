@@ -11,7 +11,10 @@ var animating = false
 @export var moves_per_round = 5
 @export_range(0, 1) var padding_percentage = 0.1
 @export var game_state = 'stopped'
-
+var pressed_lane = -1
+var pressed = false
+var board_width = 0
+var padding = 0
 var rng = RandomNumberGenerator.new()
 var current_value = rng.randi_range(1, max_chip_value)
 
@@ -64,6 +67,8 @@ func start_game():
 	clear_board()
 	print(max_rows)
 	game_state = 'running'
+	padding = get_viewport().get_visible_rect().size.x * padding_percentage
+	# board_width = get_viewport().get_visible_rect().size.x - (get_viewport().get_visible_rect().size.x * padding_percentage * 2)
 	lane_width = get_viewport().get_visible_rect().size.x * (1 - padding_percentage) / max_columns
 	for x in max_columns:
 		board.append([])
@@ -303,8 +308,8 @@ func do_drop(_col):
 			await get_tree().create_timer(0.5).timeout
 			do_post_drop()
 			await get_tree().create_timer(0.5).timeout
-			#if moves % moves_per_round == 0:
-			add_row()
+			if moves % moves_per_round == 0:
+				add_row()
 			await get_tree().create_timer(0.5).timeout
 			if check_for_game_over():
 				print("game over")
@@ -313,7 +318,21 @@ func do_drop(_col):
 				do_post_drop()
 				animating = false
 				current_value = rng.randi_range(1, 7)
-	
+
+func _input(ev):
+	#print(ev)
+	if game_state == 'running':
+		if ev is InputEventMouse:
+			if ev.button_mask == 1:		
+				var pos_x = ev.position.x - padding /2				
+				if pos_x > 0 && pos_x < get_viewport().get_visible_rect().size.x - padding:
+					pressed_lane = int(pos_x / lane_width)
+					pressed = true
+			if ev.button_mask == 0 && pressed:
+				pressed = false
+				do_drop(pressed_lane + 1)
+					
+		
 func _process(delta):
 	if game_state == 'stopped':
 		if Input.is_action_just_pressed("keyS"):
